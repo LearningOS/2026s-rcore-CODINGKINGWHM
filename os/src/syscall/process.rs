@@ -1,6 +1,6 @@
 //! Process management syscalls
 use crate::config::PAGE_SIZE;
-use crate::mm::{translated_byte_buffer, MapPermission, PageTable, VirtAddr};
+use crate::mm::{translated_byte_buffer, MapPermission, PageTable, PTEFlags, VirtAddr};
 use crate::task::{
     change_current_mmap, change_current_munmap, change_program_brk, current_user_token,
     exit_current_and_run_next, get_current_syscall_times, suspend_current_and_run_next,
@@ -117,7 +117,8 @@ fn read_user_byte(addr: usize) -> Option<u8> {
     let page_table = PageTable::from_token(current_user_token());
     let va = VirtAddr::from(addr);
     let pte = page_table.translate(va.floor())?;
-    if !pte.is_valid() || !pte.readable() {
+    let flags = pte.flags();
+    if !pte.is_valid() || !pte.readable() || !flags.contains(PTEFlags::U) {
         return None;
     }
     Some(pte.ppn().get_bytes_array()[va.page_offset()])
@@ -129,7 +130,8 @@ fn write_user_byte(addr: usize, data: u8) -> bool {
     let Some(pte) = page_table.translate(va.floor()) else {
         return false;
     };
-    if !pte.is_valid() || !pte.writable() {
+    let flags = pte.flags();
+    if !pte.is_valid() || !pte.writable() || !flags.contains(PTEFlags::U) {
         return false;
     }
     pte.ppn().get_bytes_array()[va.page_offset()] = data;
