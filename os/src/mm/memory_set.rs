@@ -262,6 +262,46 @@ impl MemorySet {
             false
         }
     }
+        /// Map a new user area for mmap.
+    pub fn mmap(&mut self, start: usize, len: usize, permission: MapPermission) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            if let Some(pte) = self.page_table.translate(vpn) {
+                if pte.is_valid() {
+                    return -1;
+                }
+            }
+        }
+        self.insert_framed_area(start_va, end_va, permission);
+        0
+    }
+
+    /// Unmap a user area for munmap.
+    pub fn munmap(&mut self, start: usize, len: usize) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            match self.page_table.translate(vpn) {
+                Some(pte) if pte.is_valid() => {}
+                _ => return -1,
+            }
+        }
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            if let Some(area) = self
+                .areas
+                .iter_mut()
+                .find(|area| area.vpn_range.get_start() <= vpn && vpn < area.vpn_range.get_end())
+            {
+                area.unmap_one(&mut self.page_table, vpn);
+            }
+        }
+        0
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {

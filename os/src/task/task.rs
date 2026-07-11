@@ -1,6 +1,6 @@
 //! Types related to task management
 use super::TaskContext;
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
@@ -10,24 +10,20 @@ use crate::trap::{trap_handler, TrapContext};
 pub struct TaskControlBlock {
     /// Save task context
     pub task_cx: TaskContext,
-
     /// Maintain the execution status of the current process
     pub task_status: TaskStatus,
-
     /// Application address space
     pub memory_set: MemorySet,
-
     /// The phys page number of trap context
     pub trap_cx_ppn: PhysPageNum,
-
     /// The size(top addr) of program which is loaded from elf file
     pub base_size: usize,
-
     /// Heap bottom
     pub heap_bottom: usize,
-
     /// Program break
     pub program_brk: usize,
+    /// Syscall invocation counts
+    pub syscall_times: [usize; MAX_SYSCALL_NUM],
 }
 
 impl TaskControlBlock {
@@ -41,14 +37,12 @@ impl TaskControlBlock {
     }
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
-        // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
             .unwrap()
             .ppn();
         let task_status = TaskStatus::Ready;
-        // map a kernel-stack in kernel space
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(app_id);
         KERNEL_SPACE.exclusive_access().insert_framed_area(
             kernel_stack_bottom.into(),
@@ -63,8 +57,8 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            syscall_times: [0; MAX_SYSCALL_NUM],
         };
-        // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,

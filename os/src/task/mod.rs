@@ -132,6 +132,39 @@ impl TaskManager {
         let cur = inner.current_task;
         inner.tasks[cur].change_program_brk(size)
     }
+        /// Record one syscall for current task.
+    fn record_current_syscall(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        if syscall_id < crate::config::MAX_SYSCALL_NUM {
+            inner.tasks[cur].syscall_times[syscall_id] += 1;
+        }
+    }
+
+    /// Get syscall count for current task.
+    fn get_current_syscall_times(&self, syscall_id: usize) -> isize {
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        if syscall_id < crate::config::MAX_SYSCALL_NUM {
+            inner.tasks[cur].syscall_times[syscall_id] as isize
+        } else {
+            -1
+        }
+    }
+
+    /// Map pages in current task.
+    fn mmap_current(&self, start: usize, len: usize, perm: crate::mm::MapPermission) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].memory_set.mmap(start, len, perm)
+    }
+
+    /// Unmap pages in current task.
+    fn munmap_current(&self, start: usize, len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].memory_set.munmap(start, len)
+    }
 
     /// Switch current `Running` task to the task we have found,
     /// or there is no `Ready` task and we can exit with all applications completed
@@ -201,4 +234,23 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+/// Record one syscall for current task.
+pub fn record_current_syscall(syscall_id: usize) {
+    TASK_MANAGER.record_current_syscall(syscall_id);
+}
+
+/// Get syscall count for current task.
+pub fn get_current_syscall_times(syscall_id: usize) -> isize {
+    TASK_MANAGER.get_current_syscall_times(syscall_id)
+}
+
+/// Map pages in current task.
+pub fn change_current_mmap(start: usize, len: usize, perm: crate::mm::MapPermission) -> isize {
+    TASK_MANAGER.mmap_current(start, len, perm)
+}
+
+/// Unmap pages in current task.
+pub fn change_current_munmap(start: usize, len: usize) -> isize {
+    TASK_MANAGER.munmap_current(start, len)
 }
