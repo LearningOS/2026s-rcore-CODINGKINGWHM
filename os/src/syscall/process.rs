@@ -79,7 +79,9 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     if start % PAGE_SIZE != 0 || len == 0 || port == 0 || (port & !0x7) != 0 {
         return -1;
     }
+
     let mut perm = MapPermission::U;
+
     if port & 0x1 != 0 {
         perm |= MapPermission::R;
     }
@@ -89,9 +91,9 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     if port & 0x4 != 0 {
         perm |= MapPermission::X;
     }
+
     change_current_mmap(start, len, perm)
 }
-
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!("kernel: sys_munmap");
