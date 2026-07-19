@@ -26,11 +26,12 @@ jobs:
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
           set -o pipefail
           cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} OFFLINE=1 2>&1 | tee ../output.txt
+
       - name: end
         id: end
         shell: bash
         run: |
-          POINTS=$(grep -oP '\d+/\d+' output.txt | tail -n 1 || true)
+          POINTS=$(grep -a -oP '\d+/\d+' output.txt | tail -n 1 || true)
           echo "points=$POINTS"
           echo "points=$POINTS" >> $GITHUB_OUTPUT
       - name: Require full points
