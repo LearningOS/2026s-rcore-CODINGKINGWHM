@@ -4,10 +4,11 @@
 //!
 //! `UPSafeCell<OSInodeInner>` -> `OSInode`: for static `ROOT_INODE`,we
 //! need to wrap `OSInodeInner` into `UPSafeCell`
-use super::File;
+use super::{File, Stat, StatMode};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use bitflags::*;
@@ -22,6 +23,7 @@ pub struct OSInode {
     writable: bool,
     inner: UPSafeCell<OSInodeInner>,
 }
+
 /// The OS inode inner in 'UPSafeCell'
 pub struct OSInodeInner {
     offset: usize,
@@ -37,6 +39,7 @@ impl OSInode {
             inner: unsafe { UPSafeCell::new(OSInodeInner { offset: 0, inode }) },
         }
     }
+
     /// read all data from the inode
     pub fn read_all(&self) -> Vec<u8> {
         let mut inner = self.inner.exclusive_access();
@@ -52,6 +55,22 @@ impl OSInode {
             v.extend_from_slice(&buffer[..len]);
         }
         v
+    }
+
+    /// Get stat of the inode
+    pub fn fstat(&self) -> Stat {
+        let inner = self.inner.exclusive_access();
+        Stat {
+            dev: 0,
+            ino: inner.inode.inode_id(),
+            mode: if inner.inode.is_dir() {
+                StatMode::DIR
+            } else {
+                StatMode::FILE
+            },
+            nlink: inner.inode.nlink(),
+            pad: [0; 7],
+        }
     }
 }
 
@@ -106,11 +125,9 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     let (readable, writable) = flags.read_write();
     if flags.contains(OpenFlags::CREATE) {
         if let Some(inode) = ROOT_INODE.find(name) {
-            // clear size
             inode.clear();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
-            // create file
             ROOT_INODE
                 .create(name)
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
@@ -125,13 +142,26 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 
+/// Create a hard link to an inode.
+pub fn linkat(old_inode: Arc<OSInode>, new_name: String) -> isize {
+    let inner = old_inode.inner.exclusive_access();
+    ROOT_INODE.linkat(&new_name, inner.inode.clone())
+}
+
+/// Remove a hard link by name.
+pub fn unlinkat(name: String) -> isize {
+    ROOT_INODE.unlinkat(&name)
+}
+
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
     }
+
     fn writable(&self) -> bool {
         self.writable
     }
+
     fn read(&self, mut buf: UserBuffer) -> usize {
         let mut inner = self.inner.exclusive_access();
         let mut total_read_size = 0usize;
@@ -145,6 +175,7 @@ impl File for OSInode {
         }
         total_read_size
     }
+
     fn write(&self, buf: UserBuffer) -> usize {
         let mut inner = self.inner.exclusive_access();
         let mut total_write_size = 0usize;
@@ -155,5 +186,9 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+
+    fn fstat(&self) -> Stat {
+        OSInode::fstat(self)
     }
 }
