@@ -26,11 +26,13 @@ jobs:
         
           cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} OFFLINE=1 2>&1 | tee ../output.txt
           cat ../output.txt
-      - name: end
+            - name: end
         id: end
+        shell: bash
         run: |
-          cat output.txt | grep "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}"
-          cat output.txt | grep "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}" >> $GITHUB_OUTPUT
+          POINTS=$(grep -oP '\d+/\d+' output.txt | tail -n 1 || true)
+          echo "points=$POINTS"
+          echo "points=$POINTS" >> $GITHUB_OUTPUT
       - name: Require full points
         run: |
           POINTS='${{ steps.end.outputs.points }}'
