@@ -10,7 +10,7 @@ jobs:
   basic-test:
     runs-on: ubuntu-latest
     outputs:
-      points: ${{ steps.end.outputs.points}}
+      points: ${{ steps.end.outputs.points }}
     container:
       image: alicesama/rcore-ci:2024a
     steps:
@@ -23,7 +23,8 @@ jobs:
           git clone https://github.com/LearningOS/rCore-Tutorial-Checker.git ci-user
           git clone https://github.com/LearningOS/rCore-Tutorial-Test.git ci-user/user
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
-          cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} OFFLINE=1 > ../output.txt
+          set -o pipefail
+          cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} OFFLINE=1 2>&1 | tee ../output.txt
           cat ../output.txt
       - name: end
         id: end
