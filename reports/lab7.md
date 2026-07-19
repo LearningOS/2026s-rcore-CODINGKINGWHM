@@ -1,4 +1,4 @@
-# lab2 report
+# lab7 report
 
 本次实验完成了 rCore 对应章节的基础功能实现与测试。
 
